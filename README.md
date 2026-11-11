@@ -92,6 +92,34 @@ bodies are size-limited.
   in front of the app (never expose it directly), rate limiting, and billing (e.g. Stripe)
   keyed on workspace.
 
+## Docker
+
+```sh
+docker build -t <dockerhub-user>/budget-app:latest .
+docker login                       # once, with a DockerHub access token
+docker push <dockerhub-user>/budget-app:latest
+```
+
+Run locally:
+
+```sh
+docker compose up -d --build       # http://localhost:3000, data in the budget-data volume
+docker compose logs -f
+docker compose down
+```
+
+Or without compose:
+
+```sh
+docker run -d --name budget-app -p 3000:3000 -v budget-data:/data <dockerhub-user>/budget-app:latest
+```
+
+The image is `node:26-alpine` (current Active LTS), runs as the non-root `node` user,
+stores data in `/data` (a named volume in compose), exposes port 3000, and has a
+`HEALTHCHECK` against `/api/health`. `.dockerignore` keeps `.git`, `node_modules`,
+local `data/`, and logs out of the image. CI builds the image and smoke-tests the
+health + API endpoints on every PR.
+
 ## Tests
 
 ```sh

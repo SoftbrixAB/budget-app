@@ -1,0 +1,9 @@
+.git
+.github
+node_modules
+data
+budget.json
+*.log
+Dockerfile
+.dockerignore
+docker-compose.yaml
