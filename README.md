@@ -7,7 +7,7 @@ purchases** and **recurring costs** (weekly / monthly / quarterly / yearly).
 
 ## Requirements
 
-Node.js >= 18. No npm dependencies.
+Node.js >= 22 (only non-EOL LTS lines are supported: 22, 24, 26 as of Nov 2026; 18 and 20 are EOL). No npm dependencies.
 
 ## Run the web app
 
