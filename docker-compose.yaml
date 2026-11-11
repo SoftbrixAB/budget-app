@@ -1,7 +1,7 @@
 services:
   budget-app:
     build: .
-    image: budget-app:latest
+    image: ${BUDGET_IMAGE:-budget-app:latest}
     container_name: budget-app
     restart: unless-stopped
     ports:

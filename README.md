@@ -120,6 +120,26 @@ stores data in `/data` (a named volume in compose), exposes port 3000, and has a
 local `data/`, and logs out of the image. CI builds the image and smoke-tests the
 health + API endpoints on every PR.
 
+## CI/CD
+
+Two workflows:
+
+- **`ci.yml`** (PRs + pushes to `main`): tests on Node 22/24/26, dependency audit, local docker build + smoke test.
+- **`docker-publish.yml`**:
+  - on **pull requests** to `main`: builds the image and pushes a preview tag to GitHub Container Registry: `ghcr.io/<owner>/budget-app:pr-<number>`, then smoke-tests it;
+  - on **pushes to `main`** (i.e. after merge): pushes `ghcr.io/<owner>/budget-app:latest` and `:sha-<sha>`, then deploys to your server over SSH (`docker compose pull && up -d`).
+
+The deploy job only runs when the following repo secrets are set (Settings → Secrets and variables → Actions):
+
+| Secret | Purpose |
+| --- | --- |
+| `DEPLOY_HOST` | hostname/IP of your server |
+| `DEPLOY_USER` | SSH user (e.g. `deploy`) |
+| `DEPLOY_SSH_KEY` | private SSH key with access to that user |
+| `DEPLOY_DIR` | optional, app directory on the server (default `/opt/budget-app`) |
+
+On the server, keep a `docker-compose.yaml` with `image: ${BUDGET_IMAGE:-budget-app:latest}` (as in this repo) and the `budget-data` volume; the workflow exports `BUDGET_IMAGE=ghcr.io/<owner>/budget-app:latest` before `docker compose pull`. GHCR login on the server uses the workflow's `GITHUB_TOKEN`. Until the secrets exist, the deploy job is skipped and CI stays green. To make the GHCR package pullable by your server without auth, set the package visibility to public (or add a PAT on the server).
+
 ## Tests
 
 ```sh
