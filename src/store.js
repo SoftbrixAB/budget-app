@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export function defaultStore() {
   return {
-    version: 1,
+    version: 2,
     currency: 'USD',
     budget: null,
     fallbackEstimate: 5,
@@ -18,6 +18,11 @@ export function loadStore(file) {
     const data = JSON.parse(raw);
     const store = { ...defaultStore(), ...data };
     if (!Array.isArray(store.items)) store.items = [];
+    for (const it of store.items) {
+      if (!it.kind) it.kind = 'once';
+      if (it.interval === undefined) it.interval = null;
+      if (it.checked === undefined) it.checked = false;
+    }
     if (typeof store.nextId !== 'number') store.nextId = store.items.length + 1;
     return store;
   } catch {
@@ -30,12 +35,17 @@ export function saveStore(file, store) {
   fs.writeFileSync(file, JSON.stringify(store, null, 2) + '\n');
 }
 
-export function addItem(store, parsed) {
+export function addItem(store, parsed, opts = {}) {
+  const kind = opts.kind || (parsed.recurring ? 'recurring' : 'once');
+  const interval = kind === 'recurring' ? opts.interval || parsed.recurring || 'monthly' : null;
+  const { recurring, ...fields } = parsed;
   const item = {
     id: store.nextId++,
     createdAt: new Date().toISOString(),
     checked: false,
-    ...parsed
+    kind,
+    interval,
+    ...fields
   };
   store.items.push(item);
   return item;
@@ -71,16 +81,4 @@ export function clearChecked(store) {
   const before = store.items.length;
   store.items = store.items.filter((it) => !it.checked);
   return before - store.items.length;
-}
-
-export function totals(store) {
-  const total = store.items.reduce((s, it) => s + (Number(it.cost) || 0), 0);
-  const checked = store.items.reduce((s, it) => s + (it.checked ? Number(it.cost) || 0 : 0), 0);
-  const remaining = store.budget !== null && store.budget !== undefined ? store.budget - total : null;
-  return {
-    total: Math.round(total * 100) / 100,
-    checked: Math.round(checked * 100) / 100,
-    unchecked: Math.round((total - checked) * 100) / 100,
-    remaining: remaining === null ? null : Math.round(remaining * 100) / 100
-  };
 }

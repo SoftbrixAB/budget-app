@@ -1,13 +1,15 @@
 {
   "name": "budget-app",
   "version": "1.0.0",
-  "description": "CLI budget app with a checklist and automatic cost estimates for each entry",
+  "description": "Budget web app + CLI with a checklist, automatic per-entry cost estimates, and recurring vs one-time costs",
   "type": "module",
   "bin": {
     "budget": "budget.js"
   },
   "scripts": {
-    "start": "node budget.js",
+    "start": "node src/server.js",
+    "web": "node src/server.js",
+    "cli": "node budget.js",
     "test": "node --test \"test/*.test.js\""
   },
   "engines": {

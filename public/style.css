@@ -1,0 +1,69 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f4f5f7;
+  color: #1c2330;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.2rem;
+  background: #1c2330;
+  color: #fff;
+}
+header h1 { font-size: 1.1rem; margin: 0; }
+.ws { display: flex; gap: 0.5rem; align-items: center; }
+main { max-width: 960px; margin: 1.2rem auto; padding: 0 1rem; display: grid; gap: 1rem; }
+.card {
+  background: #fff;
+  border: 1px solid #e2e5ea;
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+}
+.card h2 { margin-top: 0; font-size: 1rem; }
+.row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.row input[type="text"] { flex: 1 1 260px; }
+input, select, button {
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #c9cfd8;
+  border-radius: 6px;
+  background: #fff;
+}
+button { background: #2563eb; color: #fff; border-color: #2563eb; cursor: pointer; }
+button:hover { background: #1d4fd7; }
+.hint { color: #667085; font-size: 0.85rem; margin-bottom: 0; }
+.summary { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+.summary .stat .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #667085; }
+.summary .stat .value { font-size: 1.25rem; font-weight: 600; }
+.summary .stat.over .value { color: #c01048; }
+ul.entries { list-style: none; margin: 0; padding: 0; }
+ul.entries li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.2rem;
+  border-bottom: 1px solid #eef0f3;
+  flex-wrap: wrap;
+}
+ul.entries li:last-child { border-bottom: none; }
+ul.entries li.checked .name { text-decoration: line-through; color: #98a2b3; }
+ul.entries .name { font-weight: 500; }
+ul.entries .qty { color: #667085; font-size: 0.85rem; }
+ul.entries .cost { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+ul.entries .empty { color: #98a2b3; }
+.badge {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #175cd3;
+  border: 1px solid #b2ccff;
+}
+.badge.src { background: #f2f4f7; color: #475467; border-color: #e4e7ec; }
+li button { padding: 0.15rem 0.5rem; font-size: 0.8rem; background: #fff; color: #344054; border-color: #d0d5dd; }
+li button:hover { background: #f2f4f7; }
+li button.del { color: #c01048; }
+#summary-card .budget-line { flex-basis: 100%; color: #475467; }

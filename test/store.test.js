@@ -11,9 +11,9 @@ import {
   setChecked,
   removeItem,
   setPrice,
-  clearChecked,
-  totals
+  clearChecked
 } from '../src/store.js';
+import { summarize } from '../src/model.js';
 import { parseEntry } from '../src/estimator.js';
 
 function tmpFile() {
@@ -47,6 +47,37 @@ test('loadStore survives a corrupt file', () => {
   assert.deepEqual(store.items, []);
 });
 
+test('v1 files are migrated: items without kind become one-time', () => {
+  const file = tmpFile();
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      version: 1,
+      currency: 'USD',
+      budget: null,
+      fallbackEstimate: 5,
+      items: [{ id: 1, name: 'milk', quantity: 1, unit: 'l', unitPrice: 1.6, cost: 1.6, source: 'catalog', checked: true }],
+      nextId: 2
+    })
+  );
+  const store = loadStore(file);
+  assert.equal(store.items[0].kind, 'once');
+  assert.equal(store.items[0].interval, null);
+  assert.equal(store.items[0].checked, true);
+});
+
+test('addItem applies recurring kind/interval from catalog hint or opts', () => {
+  const store = defaultStore();
+  const hyra = addItem(store, parseEntry('Hyra'));
+  assert.equal(hyra.kind, 'recurring');
+  assert.equal(hyra.interval, 'monthly');
+  const forced = addItem(store, parseEntry('Hyra'), { kind: 'once' });
+  assert.equal(forced.kind, 'once');
+  assert.equal(forced.interval, null);
+  const forcedInterval = addItem(store, parseEntry('Domän'), { kind: 'recurring', interval: 'monthly' });
+  assert.equal(forcedInterval.interval, 'monthly');
+});
+
 test('checklist toggle, remove and clearChecked', () => {
   const store = defaultStore();
   const a = addItem(store, parseEntry('milk'));
@@ -69,15 +100,17 @@ test('setPrice marks the entry manual and recomputes cost from quantity', () => 
   assert.equal(updated.cost, 9.0);
 });
 
-test('totals splits checked vs unchecked and computes remaining', () => {
+test('summarize splits one-time vs recurring-monthly and computes remaining', () => {
   const store = defaultStore();
-  store.budget = 20;
+  store.budget = 2000;
   const a = addItem(store, parseEntry('2 kg apples'));
-  addItem(store, parseEntry('milk'));
+  addItem(store, parseEntry('Hyra'));
+  addItem(store, parseEntry('Domän'));
   setChecked(store, a.id, true);
-  const t = totals(store);
-  assert.equal(t.total, 7.6);
-  assert.equal(t.checked, 6.0);
-  assert.equal(t.unchecked, 1.6);
-  assert.equal(t.remaining, 12.4);
+  const s = summarize(store);
+  assert.equal(s.once, 6.0);
+  assert.equal(s.onceChecked, 6.0);
+  assert.equal(s.monthly, 1200 + 15 / 12);
+  assert.equal(s.total, 6.0 + 1200 + 15 / 12);
+  assert.equal(s.remaining, 2000 - s.total);
 });

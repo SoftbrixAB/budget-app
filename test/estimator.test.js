@@ -77,6 +77,7 @@ test('prefers the longest matching keyword: "ground coffee"', () => {
   const e = parseEntry('ground coffee');
   assert.equal(e.name, 'ground coffee');
   assert.equal(e.unitPrice, 14.0);
+  assert.equal(e.recurring, null);
 });
 
 test('does not match substrings inside words: "milkshake" is not milk', () => {
@@ -94,4 +95,62 @@ test('volume conversion: "250 ml juice"', () => {
   assert.equal(e.quantity, 0.25);
   assert.equal(e.unit, 'l');
   assert.equal(e.cost, 0.63);
+});
+
+test('swedish office items match the catalog: "Kontorsstol"', () => {
+  const e = parseEntry('Kontorsstol');
+  assert.equal(e.source, 'catalog');
+  assert.equal(e.cost, 250);
+  assert.equal(e.recurring, null);
+});
+
+test('"Skärm med inbyggd kamera" matches monitor', () => {
+  const e = parseEntry('Skärm med inbyggd kamera och ljud');
+  assert.equal(e.source, 'catalog');
+  assert.equal(e.unitPrice, 300);
+});
+
+test('"PS5" matches the console; longer keywords win in mixed text', () => {
+  const e = parseEntry('PS5');
+  assert.equal(e.source, 'catalog');
+  assert.equal(e.unitPrice, 500);
+  const mixed = parseEntry('PS5 med extra handkontroll');
+  assert.equal(mixed.unitPrice, 70);
+});
+
+test('recurring catalog items carry the interval hint: "Hyra"', () => {
+  const e = parseEntry('Hyra');
+  assert.equal(e.source, 'catalog');
+  assert.equal(e.recurring, 'monthly');
+  assert.equal(e.cost, 1200);
+});
+
+test('"Pensionssparande" is recurring monthly', () => {
+  const e = parseEntry('Pensionssparande');
+  assert.equal(e.recurring, 'monthly');
+  assert.equal(e.cost, 200);
+});
+
+test('"Domän" is recurring yearly', () => {
+  const e = parseEntry('Domän');
+  assert.equal(e.recurring, 'yearly');
+});
+
+test('catalog prices convert to the workspace currency: SEK', () => {
+  const e = parseEntry('milk', 5, { currency: 'SEK' });
+  assert.equal(e.source, 'catalog');
+  assert.equal(e.unitPrice, 17.28);
+  assert.equal(e.cost, 17.28);
+});
+
+test('given prices are not converted (already in workspace currency)', () => {
+  const e = parseEntry('Hyra @ 12000', 5, { currency: 'SEK' });
+  assert.equal(e.source, 'given');
+  assert.equal(e.cost, 12000);
+});
+
+test('fallback estimate is not converted (already in workspace currency)', () => {
+  const e = parseEntry('mystery item', 500, { currency: 'SEK' });
+  assert.equal(e.source, 'fallback');
+  assert.equal(e.cost, 500);
 });

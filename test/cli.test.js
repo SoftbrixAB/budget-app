@@ -26,6 +26,7 @@ test('end-to-end: add, list, check, price, budget, remove, clear', () => {
   assert.match(added, /#1 "apples"/);
   assert.match(added, /\$6\.00/);
   assert.match(added, /\[catalog\]/);
+  assert.match(added, /\(once\)/);
 
   cli(file, 'add', 'milk');
   cli(file, 'add', '4 dragon scales');
@@ -34,13 +35,14 @@ test('end-to-end: add, list, check, price, budget, remove, clear', () => {
   assert.match(out, /apples/);
   assert.match(out, /\[ \]/);
   assert.match(out, /dragon scales\s+4 each\s+\$20\.00\s+fallback/);
-  assert.match(out, /Total estimated: \$27\.60/);
+  assert.match(out, /Total planned: \$27\.60/);
+  assert.match(out, /Recurring: \$0\.00\/month/);
 
   out = cli(file, 'check', '1');
   assert.match(out, /#1 "apples" checked/);
   out = cli(file, 'list');
-  assert.match(out, /\[x\]\s+apples/);
-  assert.match(out, /checked: \$6\.00, unchecked: \$21\.60/);
+  assert.match(out, /\[x\]\s+once\s+apples/);
+  assert.match(out, /One-time: \$27\.60 \(checked \$6\.00\)/);
 
   out = cli(file, 'price', '2', '2.00');
   assert.match(out, /#2 "milk" price set to \$2\.00 \[manual\]/);
@@ -65,6 +67,25 @@ test('end-to-end: add, list, check, price, budget, remove, clear', () => {
   assert.match(out, /No entries yet/);
 });
 
+test('recurring entries: catalog hint and explicit --monthly flag', () => {
+  const file = makeFile();
+  let out = cli(file, 'add', 'Hyra');
+  assert.match(out, /\$1,200\.00\/month/);
+  assert.match(out, /\(recurring\/monthly\)/);
+  out = cli(file, 'add', '--monthly', 'Bokföring');
+  assert.match(out, /#2 "Bokföring"/);
+  assert.match(out, /\(recurring\/monthly\)/);
+  out = cli(file, 'add', '--yearly', 'Domän');
+  assert.match(out, /\(recurring\/yearly\)/);
+  out = cli(file, 'add', '--once', 'Kontorsstol');
+  assert.match(out, /\$250\.00/);
+  assert.match(out, /\(once\)/);
+  out = cli(file, 'list');
+  assert.match(out, /recurring\/monthly\s+Hyra/);
+  assert.match(out, /Recurring: \$1,251\.25\/month/);
+  assert.match(out, /One-time: \$250\.00/);
+});
+
 test('data persists across processes', () => {
   const file = makeFile();
   cli(file, 'add', 'bread x3');
@@ -77,18 +98,18 @@ test('unknown command prints help', () => {
   const file = makeFile();
   const out = cli(file, 'frobnicate');
   assert.match(out, /unknown command: frobnicate/);
-  assert.match(out, /add <item>/);
+  assert.match(out, /add \[--once/);
 });
 
-test('currency flag is applied and persisted', () => {
+test('currency flag is applied and persisted; catalog prices convert', () => {
   const file = makeFile();
-  const r = spawnSync(process.execPath, [entry, '--file', file, '--currency', 'eur', 'add', 'milk'], {
+  const r = spawnSync(process.execPath, [entry, '--file', file, '--currency', 'sek', 'add', 'milk'], {
     encoding: 'utf8'
   });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /€1\.60/);
+  assert.match(r.stdout, /17\.28/);
   const out = cli(file, 'list');
-  assert.match(out, /€1\.60/);
+  assert.match(out, /17\.28/);
 });
 
 test('check with a bad id reports an error', () => {

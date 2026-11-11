@@ -1,77 +1,103 @@
 # budget-app
 
-A zero-dependency Node.js CLI budget app. It keeps a **checklist** of entries and
-**estimates the cost of each entry automatically** when you add it, with running
-totals for checked (bought) vs unchecked items and an optional budget limit.
+A zero-dependency Node.js budget app — now with a **web UI + JSON REST API** (SaaS-ready
+shape) and a **CLI** that shares the same model. It keeps a **checklist** of entries and
+**estimates the cost of each entry automatically**, and it handles both **one-time
+purchases** and **recurring costs** (weekly / monthly / quarterly / yearly).
 
 ## Requirements
 
 Node.js >= 18. No npm dependencies.
 
-## Usage
+## Run the web app
 
 ```sh
-npm start                 # interactive session
-node budget.js list       # one-shot command
-node budget.js add "2 kg apples"
-node budget.js --file my.json --currency EUR list
+npm start          # serves UI + API on http://127.0.0.1:3000 (HOST/PORT env to change)
 ```
 
-Data is stored in `./budget.json` (override with `--file <path>` or `$BUDGET_FILE`).
+- Open http://127.0.0.1:3000 in a browser.
+- Each **workspace** is a separate budget (data file in `./data/<workspace>.json`,
+  override with `DATA_DIR`). Create/switch workspaces in the header — this is the
+  multi-tenant seed for a SaaS product.
+- Add entries as free text, e.g. `Kontorsstol`, `2 kg apples`, `PS5 @ 6000`,
+  or pick a cost type (one-time / recurring monthly / …) in the form.
+- Check items off, override any estimate with the **price** button, see one-time total,
+  recurring per-month total, total planned spend, and remaining budget.
 
-## Commands
+## Run the CLI
 
-| Command | Description |
-| --- | --- |
-| `add <item> [qty] [unit] [@ price]` | Add an entry; the cost is estimated automatically |
-| `list` | Show the checklist with per-entry estimates and totals |
-| `check <id>` / `uncheck <id>` / `toggle <id>` | Mark entries as bought / not bought |
-| `price <id> <amount>` | Override the estimate with an actual price |
-| `remove <id>` | Delete an entry |
-| `budget [amount]` | Show or set the budget limit |
-| `fallback [amount]` | Show or set the fallback estimate for unknown items |
-| `clear` | Remove all checked entries |
-| `help` | Show all commands |
+```sh
+npm run cli -- list
+node budget.js add "2 kg apples"
+node budget.js add --monthly Hyra
+node budget.js --file my.json --currency SEK list
+```
+
+CLI commands: `add [--once|--monthly|--quarterly|--yearly|--weekly] <item> [qty] [unit] [@ price]`,
+`list`, `check` / `uncheck` / `toggle <id>`, `price <id> <amount>`, `remove <id>`,
+`budget [amount]`, `fallback [amount]`, `clear`, `help`.
+Without arguments it starts an interactive session.
 
 ## How cost estimation works
 
-When you add an entry, the text is parsed in this order:
+`src/estimator.js` parses each entry text in this order:
 
-1. **Explicit price** — `add milk @ 2.50` or `add wine $12` uses the given price (`source: given`).
-2. **Catalog match** — a built-in price catalog (`src/catalog.js`) matches the item
-   name, e.g. `add 2 kg apples` → 2 kg × $3.00/kg = $6.00 (`source: catalog`).
-   Quantities with units (`kg`, `g`, `l`, `ml`, `kwh`, `pcs`, ...) are converted to
-   the catalog unit. A bare quantity (`add 2 apples`) counts in the item's unit.
-3. **Fallback** — unknown items get a configurable flat estimate
-   (default $5, `source: fallback`).
+1. **Explicit price** — `PS5 @ 6000`, `wine $12` → `source: given` (taken as-is in the workspace currency).
+2. **Catalog match** — `src/catalog.js` (~90 items: groceries, household, and small-company
+   items in Swedish/English — kontorsstol, skrivare, pennor, papper, skärm, PS5,
+   handkontroll, kaffe, papperskorg, hemmaserver, hyra, försäkring, pensionssparande, …).
+   Longest keyword wins; quantities with units are converted (`2 kg apples`, `500 g chicken`,
+   `bread x3`). Catalog prices are in USD and converted with `FX_RATES` when the workspace
+   uses another currency (set the currency **before** adding entries). → `source: catalog`.
+3. **Fallback** — unknown items get a configurable flat estimate (`fallback`, default 5)
+   → `source: fallback`.
 
-Override any estimate with `price <id> <amount>` (`source: manual`).
+Any estimate can be overridden per entry → `source: manual`.
 
-## Example session
+## Recurring vs one-time
 
-```
-budget> add 2 kg apples
-added #1 "apples" (2 kg) — estimated $6.00 [catalog]
-budget> add bread x3
-added #2 "bread" (3 each) — estimated $9.00 [catalog]
-budget> add concert ticket @ 45
-added #3 "concert ticket" (1 each) — estimated $45.00 [given]
-budget> check 1
-#1 "apples" checked — $6.00
-budget> budget 100
-budget set to $100.00
-budget> list
-ID  DONE  ITEM             QTY        ESTIMATE  SOURCE
- 1  [x]   apples           2 kg       $6.00     catalog
- 2  [ ]   bread            3 each     $9.00     catalog
- 3  [ ]   concert ticket   1 each     $45.00    given
+Every entry has a `kind` (`once` | `recurring`) and, for recurring, an `interval`
+(`weekly` | `monthly` | `quarterly` | `yearly`). The catalog hints the type
+(`Hyra`, `Internet`, `Pensionssparande` → recurring monthly; `Domän` → yearly), and you can
+force it in the UI or with `add --monthly …`. Summaries report:
 
-Total estimated: $60.00  (checked: $6.00, unchecked: $54.00)
-Budget: $100.00  remaining $40.00
-```
+- **One-time**: total cost of one-time purchases
+- **Recurring/month**: recurring costs normalized to a monthly equivalent
+  (yearly ÷ 12, quarterly ÷ 3, weekly × 52/12)
+- **Total planned**: one-time + monthly equivalent; compared against `budget`
+
+## REST API
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/health` | health check |
+| `GET /api/workspaces` | list workspaces |
+| `POST /api/workspaces` | create workspace `{name}` |
+| `GET /api/state?workspace=X` | settings + entries (with `monthly` equivalent) + summary |
+| `POST /api/entries?workspace=X` | add entry `{text, kind?, interval?, price?}` |
+| `PATCH /api/entries/:id?workspace=X` | update `{checked?, price?, name?, kind?, interval?}` |
+| `DELETE /api/entries/:id?workspace=X` | delete entry |
+| `PUT /api/settings?workspace=X` | update `{currency?, budget?, fallbackEstimate?}` |
+
+The server binds to `127.0.0.1` by default (`HOST`/`PORT` env). Static files are served
+from `public/` with path-traversal protection; workspace names are validated; request
+bodies are size-limited.
+
+## SaaS roadmap (seed structure)
+
+- **Workspaces** already isolate data per tenant (`data/<workspace>.json`); swap the
+  file store for a database by changing `loadStore`/`saveStore` in `src/store.js`.
+- The API is the integration surface for a hosted frontend or mobile app.
+- Next steps for production: authentication + per-workspace membership, HTTPS termination
+  in front of the app (never expose it directly), rate limiting, and billing (e.g. Stripe)
+  keyed on workspace.
 
 ## Tests
 
 ```sh
 npm test
 ```
+
+41 tests with the built-in `node:test` runner: estimator parsing/conversion/FX,
+store persistence + v1 migration, model summaries, CLI end-to-end (spawned processes),
+and the web API end-to-end (server on an ephemeral loopback port).

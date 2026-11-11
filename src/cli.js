@@ -1,6 +1,7 @@
 import path from 'node:path';
 import readline from 'node:readline';
 import { parseEntry } from './estimator.js';
+import { summarize } from './model.js';
 import {
   loadStore,
   saveStore,
@@ -9,13 +10,12 @@ import {
   setChecked,
   removeItem,
   setPrice,
-  clearChecked,
-  totals
+  clearChecked
 } from './store.js';
 
 export function fmt(amount, currency) {
   try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
   } catch {
     return `${Number(amount).toFixed(2)} ${currency}`;
   }
@@ -31,24 +31,40 @@ export function splitArgs(line) {
   return out;
 }
 
-const HELP = `budget-app commands:
-  add <item> [qty] [unit] [@ price]   add a checklist entry, cost is estimated automatically
-                                      e.g. add 2 kg apples   |   add bread x3   |   add milk @ 2.50
+const KIND_FLAGS = {
+  once: { kind: 'once', interval: null },
+  weekly: { kind: 'recurring', interval: 'weekly' },
+  monthly: { kind: 'recurring', interval: 'monthly' },
+  quarterly: { kind: 'recurring', interval: 'quarterly' },
+  yearly: { kind: 'recurring', interval: 'yearly' }
+};
+
+const HELP = `budget-app CLI commands:
+  add [--once|--monthly|--quarterly|--yearly|--weekly] <item> [qty] [unit] [@ price]
+                                      add a checklist entry, cost is estimated automatically;
+                                      cost type defaults to the catalog hint or one-time
+                                      e.g. add 2 kg apples | add Kontorsstol | add --monthly Hyra | add PS5 @ 6000
   list, ls                            show the checklist with per-entry estimates and totals
   check <id> / uncheck <id>           mark an entry as bought / not bought
   toggle <id>                         flip the checked state of an entry
   price <id> <amount>                 override the estimate with an actual price
   remove <id>, rm <id>                delete an entry
-  budget [amount]                     show or set the budget limit
+  budget [amount]                     show or set the budget limit (vs total planned spend)
   fallback [amount]                   show or set the fallback estimate for unknown items
   clear                               remove all checked entries
   help                                show this help
   exit, quit                          leave the interactive session
 
+Run the web app instead with: npm start   (serves the UI + REST API on http://127.0.0.1:3000)
+
 options:
   -f, --file <path>     data file (default: $BUDGET_FILE or ./budget.json)
   -c, --currency <code> set currency, e.g. USD, EUR, SEK
   -h, --help            show this help`;
+
+function kindLabel(it) {
+  return it.kind === 'recurring' ? `recurring/${it.interval}` : 'once';
+}
 
 function renderList(store) {
   const cur = store.currency || 'USD';
@@ -56,32 +72,37 @@ function renderList(store) {
   if (store.items.length === 0) {
     lines.push('No entries yet. Add one with: add 2 kg apples');
   } else {
-    const headers = ['ID', 'DONE', 'ITEM', 'QTY', 'ESTIMATE', 'SOURCE'];
+    const headers = ['ID', 'DONE', 'KIND', 'ITEM', 'QTY', 'ESTIMATE', 'SOURCE'];
     const rows = store.items.map((it) => [
       String(it.id),
       it.checked ? '[x]' : '[ ]',
+      kindLabel(it),
       it.name,
       `${it.quantity} ${it.unit}`,
-      fmt(it.cost, cur),
+      fmt(it.cost, cur) + (it.kind === 'recurring' ? `/${it.interval}` : ''),
       it.source
     ]);
     const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
     const fmtRow = (r) =>
       r
-        .map((cell, i) => (i === 0 || i === 4 ? cell.padStart(widths[i]) : cell.padEnd(widths[i])))
+        .map((cell, i) => (i === 0 || i === 5 ? cell.padStart(widths[i]) : cell.padEnd(widths[i])))
         .join('  ')
         .trimEnd();
     lines.push(fmtRow(headers));
     lines.push(widths.map((w) => '-'.repeat(w)).join('  '));
     for (const r of rows) lines.push(fmtRow(r));
   }
-  const t = totals(store);
+  const s = summarize(store);
   lines.push('');
-  lines.push(`Total estimated: ${fmt(t.total, cur)}  (checked: ${fmt(t.checked, cur)}, unchecked: ${fmt(t.unchecked, cur)})`);
+  lines.push(
+    `One-time: ${fmt(s.once, cur)} (checked ${fmt(s.onceChecked, cur)})  ` +
+      `Recurring: ${fmt(s.monthly, cur)}/month (checked ${fmt(s.monthlyChecked, cur)})  ` +
+      `Total planned: ${fmt(s.total, cur)}`
+  );
   if (store.budget !== null && store.budget !== undefined) {
-    const over = t.remaining < 0;
+    const over = s.remaining < 0;
     lines.push(
-      `Budget: ${fmt(store.budget, cur)}  ${over ? 'over budget by ' : 'remaining '}${fmt(Math.abs(t.remaining), cur)}`
+      `Budget: ${fmt(store.budget, cur)}  ${over ? 'over budget by ' : 'remaining '}${fmt(Math.abs(s.remaining), cur)}`
     );
   } else {
     lines.push('Budget: not set (use: budget <amount>)');
@@ -100,17 +121,31 @@ export function execute(ctx, args) {
   const cur = ctx.store.currency || 'USD';
   switch (cmd) {
     case 'add': {
-      if (!rest.length) return { changed: false, text: 'usage: add <item> [qty] [unit] [@ price]' };
+      if (!rest.length) return { changed: false, text: 'usage: add [--once|--monthly|--quarterly|--yearly|--weekly] <item> [qty] [unit] [@ price]' };
+      let kind;
+      let interval;
+      const textParts = [];
+      for (const t of rest) {
+        const key = t.replace(/^--/, '').toLowerCase();
+        if (KIND_FLAGS[key] && kind === undefined) {
+          kind = KIND_FLAGS[key].kind;
+          interval = KIND_FLAGS[key].interval;
+        } else {
+          textParts.push(t);
+        }
+      }
+      if (!textParts.length) return { changed: false, text: 'usage: add [--once|--monthly|--quarterly|--yearly|--weekly] <item> [qty] [unit] [@ price]' };
       let parsed;
       try {
-        parsed = parseEntry(rest.join(' '), ctx.store.fallbackEstimate);
+        parsed = parseEntry(textParts.join(' '), ctx.store.fallbackEstimate, { currency: ctx.store.currency });
       } catch (err) {
         return { changed: false, text: `error: ${err.message}` };
       }
-      const item = addItem(ctx.store, parsed);
+      const item = addItem(ctx.store, parsed, { kind, interval });
+      const per = item.kind === 'recurring' ? `/${item.interval}` : '';
       return {
         changed: true,
-        text: `added #${item.id} "${item.name}" (${item.quantity} ${item.unit}) — estimated ${fmt(item.cost, cur)} [${item.source}]`
+        text: `added #${item.id} "${item.name}" (${item.quantity} ${item.unit}) — estimated ${fmt(item.cost, cur)}${per} [${item.source}] (${kindLabel(item)})`
       };
     }
     case 'list':
@@ -145,13 +180,13 @@ export function execute(ctx, args) {
     }
     case 'budget': {
       if (rest.length === 0) {
-        const t = totals(ctx.store);
+        const s = summarize(ctx.store);
         return {
           changed: false,
           text:
             ctx.store.budget === null || ctx.store.budget === undefined
               ? 'budget: not set'
-              : `budget: ${fmt(ctx.store.budget, cur)}, total estimated ${fmt(t.total, cur)}, remaining ${fmt(t.remaining, cur)}`
+              : `budget: ${fmt(ctx.store.budget, cur)}, total planned ${fmt(s.total, cur)}, remaining ${fmt(s.remaining, cur)}`
         };
       }
       const amount = Number(String(rest[0]).replace(',', '.'));

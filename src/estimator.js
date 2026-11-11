@@ -1,4 +1,4 @@
-import { CATALOG, UNITS, canonical } from './catalog.js';
+import { CATALOG, UNITS, FX_RATES } from './catalog.js';
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -21,14 +21,15 @@ function matchCatalog(name) {
   return best;
 }
 
-export function parseEntry(text, fallbackEstimate = 5) {
+export function parseEntry(text, fallbackEstimate = 5, opts = {}) {
+  const rate = FX_RATES[opts.currency] ?? 1;
   let rest = String(text).trim();
   if (!rest) throw new Error('entry name is empty');
 
   let givenPrice = null;
-  const priceRe = /(?:^|\s)(?:[@=]|[$€£])\s*(\d+(?:[.,]\d+)?)(?:\s*(usd|eur|gbp))?(?=\s|$)/i;
-  const codePriceRe = /(?:^|\s)(\d+(?:[.,]\d+)?)\s*(usd|eur|gbp)(?=\s|$)/i;
-  let pm = rest.match(priceRe) || rest.match(codePriceRe);
+  const priceRe = /(?:^|\s)(?:[@=]|[$€£])\s*(\d+(?:[.,]\d+)?)(?:\s*(usd|eur|gbp|sek))?(?=\s|$)/i;
+  const codePriceRe = /(?:^|\s)(\d+(?:[.,]\d+)?)\s*(usd|eur|gbp|sek)(?=\s|$)/i;
+  const pm = rest.match(priceRe) || rest.match(codePriceRe);
   if (pm) {
     givenPrice = parseNumber(pm[1]);
     rest = (rest.slice(0, pm.index) + ' ' + rest.slice(pm.index + pm[0].length)).trim();
@@ -54,11 +55,12 @@ export function parseEntry(text, fallbackEstimate = 5) {
   if (!name || UNITS[name.toLowerCase()]) throw new Error('entry name is empty');
 
   if (givenPrice !== null) {
-    return { name, quantity: 1, unit: 'each', unitPrice: round2(givenPrice), cost: round2(givenPrice), source: 'given' };
+    return { name, quantity: 1, unit: 'each', unitPrice: round2(givenPrice), cost: round2(givenPrice), source: 'given', recurring: null };
   }
 
   const hit = matchCatalog(name);
   if (hit) {
+    const unitPrice = round2(hit.price * rate);
     const entryUnit = UNITS[hit.unit];
     let qty = quantity;
     if (unit) {
@@ -68,7 +70,15 @@ export function parseEntry(text, fallbackEstimate = 5) {
       }
     }
     qty = round2(qty);
-    return { name, quantity: qty, unit: hit.unit, unitPrice: hit.price, cost: round2(qty * hit.price), source: 'catalog' };
+    return {
+      name,
+      quantity: qty,
+      unit: hit.unit,
+      unitPrice,
+      cost: round2(qty * unitPrice),
+      source: 'catalog',
+      recurring: hit.recurring || null
+    };
   }
 
   const parsedUnit = unit ? UNITS[unit] : null;
@@ -79,11 +89,7 @@ export function parseEntry(text, fallbackEstimate = 5) {
     unit: shownUnit,
     unitPrice: round2(fallbackEstimate),
     cost: round2(quantity * fallbackEstimate),
-    source: 'fallback'
+    source: 'fallback',
+    recurring: null
   };
-}
-
-export function reestimate(item, fallbackEstimate = 5) {
-  const parsed = parseEntry(`${item.quantity !== 1 || item.unit !== 'each' ? `${item.quantity} ${item.unit} ` : ''}${item.name}`, fallbackEstimate);
-  return { ...item, ...parsed, source: parsed.source === 'fallback' ? 'fallback' : 'catalog' };
 }
