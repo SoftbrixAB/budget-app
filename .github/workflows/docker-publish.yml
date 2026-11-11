@@ -36,7 +36,7 @@ jobs:
           tags: ${{ env.IMAGE }}:pr-${{ github.event.pull_request.number }}
 
       - name: Build and push main images
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v6
         with:
           push: true
@@ -58,10 +58,14 @@ jobs:
   deploy:
     name: Deploy to hosting server
     needs: build-push
-    if: ${{ github.event_name == 'push' && secrets.DEPLOY_HOST != '' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Skip notice when deploy secrets are not configured
+        if: ${{ secrets.DEPLOY_HOST == '' }}
+        run: echo "DEPLOY_HOST not set - skipping SSH deploy (image is on GHCR as :latest)"
       - name: Deploy over SSH
+        if: ${{ secrets.DEPLOY_HOST != '' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
