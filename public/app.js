@@ -2,7 +2,8 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   ws: localStorage.getItem('budget.ws') || 'default',
-  data: null
+  data: null,
+  lastAddedId: null
 };
 
 async function api(path, opts = {}) {
@@ -25,6 +26,28 @@ function money(n) {
     return `${Number(n).toFixed(2)} ${cur}`;
   }
 }
+
+function toast(msg, kind = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 350);
+  }, 4200);
+}
+
+function route() {
+  const isSettings = location.hash === '#/settings';
+  $('view-checklist').hidden = isSettings;
+  $('view-settings').hidden = !isSettings;
+  document.querySelectorAll('nav a').forEach((a) =>
+    a.classList.toggle('active', a.dataset.view === (isSettings ? 'settings' : 'checklist'))
+  );
+}
+window.addEventListener('hashchange', route);
 
 async function refreshWorkspaces() {
   const { workspaces } = await fetch('/api/workspaces').then((r) => r.json());
@@ -63,6 +86,15 @@ function render() {
 
   renderList($('list-recurring'), d.entries.filter((e) => e.kind === 'recurring'));
   renderList($('list-once'), d.entries.filter((e) => e.kind !== 'recurring'));
+
+  if (state.lastAddedId !== null) {
+    const li = document.querySelector(`li[data-id="${state.lastAddedId}"]`);
+    if (li) {
+      li.classList.add('flash');
+      li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    state.lastAddedId = null;
+  }
 }
 
 function renderList(ul, entries) {
@@ -76,6 +108,7 @@ function renderList(ul, entries) {
   }
   for (const e of entries) {
     const li = document.createElement('li');
+    li.dataset.id = e.id;
     if (e.checked) li.classList.add('checked');
     li.innerHTML = `
       <label><input type="checkbox" ${e.checked ? 'checked' : ''}><span class="name">${esc(e.name)}</span></label>
@@ -83,33 +116,83 @@ function renderList(ul, entries) {
       <span class="cost">${money(e.cost)}${e.kind === 'recurring' ? ' / ' + esc(e.interval) : ''}</span>
       ${e.kind === 'recurring' ? `<span class="badge" title="monthly equivalent">≈ ${money(e.monthly)}/mo</span>` : ''}
       <span class="badge src">${esc(e.source)}</span>
-      <button type="button" data-act="price">price</button>
+      <button type="button" data-act="edit">edit</button>
       <button type="button" data-act="del" class="del">✕</button>
     `;
     li.querySelector('input[type=checkbox]').addEventListener('change', async (ev) => {
-      await api(`/api/entries/${e.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ checked: ev.target.checked })
-      });
-      await refresh();
+      try {
+        await api(`/api/entries/${e.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ checked: ev.target.checked })
+        });
+        await refresh();
+      } catch (err) {
+        toast(err.message, 'err');
+      }
     });
-    li.querySelector('[data-act=price]').addEventListener('click', async () => {
-      const p = prompt('Override price (leave empty to keep estimate)', e.unitPrice);
-      if (p === null || p === '') return;
-      await api(`/api/entries/${e.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ price: Number(p) })
-      });
-      await refresh();
-    });
+    li.querySelector('[data-act=edit]').addEventListener('click', () => startEdit(li, e));
     li.querySelector('[data-act=del]').addEventListener('click', async () => {
-      await api(`/api/entries/${e.id}`, { method: 'DELETE' });
-      await refresh();
+      try {
+        await api(`/api/entries/${e.id}`, { method: 'DELETE' });
+        toast(`removed #${e.id} "${e.name}"`);
+        await refresh();
+      } catch (err) {
+        toast(err.message, 'err');
+      }
     });
     ul.appendChild(li);
   }
+}
+
+const UNIT_OPTIONS = ['each', 'kg', 'g', 'l', 'ml', 'kwh'];
+const INTERVAL_OPTIONS = ['weekly', 'monthly', 'quarterly', 'yearly'];
+
+function startEdit(li, e) {
+  li.classList.add('editing');
+  li.innerHTML = `
+    <input class="e-name" type="text" value="${esc(e.name)}" title="name">
+    <input class="e-qty" type="number" step="any" min="0.0001" value="${e.quantity}" title="quantity">
+    <select class="e-unit" title="unit">
+      ${UNIT_OPTIONS.map((u) => `<option value="${u}" ${u === e.unit ? 'selected' : ''}>${u}</option>`).join('')}
+    </select>
+    <input class="e-price" type="number" step="0.01" min="0" value="${e.unitPrice}" title="unit price">
+    <select class="e-kind" title="cost type">
+      <option value="once" ${e.kind === 'once' ? 'selected' : ''}>one-time</option>
+      <option value="recurring" ${e.kind === 'recurring' ? 'selected' : ''}>recurring</option>
+    </select>
+    <select class="e-interval" title="interval" ${e.kind === 'recurring' ? '' : 'hidden'}>
+      ${INTERVAL_OPTIONS.map((i) => `<option value="${i}" ${i === e.interval ? 'selected' : ''}>${i}</option>`).join('')}
+    </select>
+    <button type="button" class="save">Save</button>
+    <button type="button" class="cancel">Cancel</button>
+  `;
+  const kindSel = li.querySelector('.e-kind');
+  kindSel.addEventListener('change', () => {
+    li.querySelector('.e-interval').hidden = kindSel.value !== 'recurring';
+  });
+  li.querySelector('.cancel').addEventListener('click', () => refresh());
+  li.querySelector('.save').addEventListener('click', async () => {
+    const body = {
+      name: li.querySelector('.e-name').value,
+      quantity: Number(li.querySelector('.e-qty').value),
+      unit: li.querySelector('.e-unit').value,
+      price: Number(li.querySelector('.e-price').value),
+      kind: kindSel.value
+    };
+    if (kindSel.value === 'recurring') body.interval = li.querySelector('.e-interval').value;
+    try {
+      await api(`/api/entries/${e.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      toast(`updated #${e.id} "${body.name}" — now ${money(body.quantity * body.price)}${body.kind === 'recurring' ? '/' + body.interval : ''}`);
+      await refresh();
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  });
 }
 
 $('add-form').addEventListener('submit', async (ev) => {
@@ -123,16 +206,19 @@ $('add-form').addEventListener('submit', async (ev) => {
   }
   if ($('add-price').value) body.price = Number($('add-price').value);
   try {
-    await api('/api/entries', {
+    const r = await api('/api/entries', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body)
     });
+    const e = r.entry;
+    state.lastAddedId = e.id;
+    toast(`added #${e.id} "${e.name}" — estimated ${money(e.cost)}${e.kind === 'recurring' ? '/' + e.interval : ''} [${e.source}]`);
     $('add-text').value = '';
     $('add-price').value = '';
     await refresh();
   } catch (err) {
-    alert(err.message);
+    toast(err.message, 'err');
   }
 });
 
@@ -148,9 +234,10 @@ $('settings-form').addEventListener('submit', async (ev) => {
         fallbackEstimate: Number($('fallback').value)
       })
     });
+    toast('settings saved');
     await refresh();
   } catch (err) {
-    alert(err.message);
+    toast(err.message, 'err');
   }
 });
 
@@ -164,24 +251,24 @@ $('new-ws').addEventListener('click', async () => {
   const name = prompt('New workspace name (letters, numbers, - _):');
   if (!name) return;
   try {
-    await fetch('/api/workspaces', {
+    const r = await fetch('/api/workspaces', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name })
-    }).then(async (r) => {
-      const b = await r.json();
-      if (!r.ok) throw new Error(b.error || r.statusText);
-      return b;
     });
+    const b = await r.json();
+    if (!r.ok) throw new Error(b.error || r.statusText);
     state.ws = name;
     localStorage.setItem('budget.ws', name);
+    toast(`workspace "${name}" created`);
     await refreshWorkspaces();
     await refresh();
   } catch (err) {
-    alert(err.message);
+    toast(err.message, 'err');
   }
 });
 
+route();
 refreshWorkspaces().then(refresh).catch((err) => {
   document.body.innerHTML = `<main><section class="card"><h2>Error</h2><p>${esc(err.message)}</p></section></main>`;
 });

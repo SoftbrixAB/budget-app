@@ -165,3 +165,40 @@ test('web API end-to-end on loopback', async (t) => {
   const wsList = await j(await fetch(`${base}/api/workspaces`));
   assert.deepEqual(wsList.body.workspaces, ['acme']);
 });
+
+test('PATCH edits name/quantity/unit/price/kind and recomputes cost', async (t) => {
+  const { server, base } = await startServer();
+  t.after(() => server.close());
+  const post = (p, b) =>
+    fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+  const patch = (id, b) =>
+    fetch(`${base}/api/entries/${id}?workspace=w`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+
+  await post('/api/workspaces', { name: 'w' });
+  const added = await j(await post('/api/entries?workspace=w', { text: '2 kg apples' }));
+  const id = added.body.entry.id;
+  assert.equal(added.body.entry.cost, 6);
+
+  let r = await j(await patch(id, { quantity: 5 }));
+  assert.equal(r.status, 200);
+  assert.equal(r.body.entry.quantity, 5);
+  assert.equal(r.body.entry.cost, 15);
+
+  r = await j(await patch(id, { price: 4 }));
+  assert.equal(r.body.entry.source, 'manual');
+  assert.equal(r.body.entry.unitPrice, 4);
+  assert.equal(r.body.entry.cost, 20);
+
+  r = await j(await patch(id, { name: 'big apples', kind: 'recurring', interval: 'monthly', unit: 'kg' }));
+  assert.equal(r.body.entry.name, 'big apples');
+  assert.equal(r.body.entry.kind, 'recurring');
+  assert.equal(r.body.entry.interval, 'monthly');
+  assert.equal(r.body.entry.unit, 'kg');
+  assert.equal(r.body.entry.monthly, 20);
+
+  r = await j(await patch(id, { unit: 'bogus' }));
+  assert.equal(r.status, 400);
+
+  r = await j(await patch(id, { quantity: -1 }));
+  assert.equal(r.status, 400);
+});

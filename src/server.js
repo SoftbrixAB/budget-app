@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseEntry } from './estimator.js';
+import { UNITS } from './catalog.js';
 import { monthlyEquivalent, summarize } from './model.js';
 import {
   defaultStore,
@@ -175,6 +176,20 @@ export function createServer(opts = {}) {
           const it = findItem(store, id);
           if (!it) throw httpError(404, 'no entry with that id');
           if (body.checked !== undefined) setChecked(store, id, !!body.checked);
+          let recompute = false;
+          if (body.quantity !== undefined && body.quantity !== null && body.quantity !== '') {
+            const q = Number(body.quantity);
+            if (!Number.isFinite(q) || q <= 0) throw httpError(400, 'quantity must be a positive number');
+            it.quantity = q;
+            recompute = true;
+          }
+          if (body.unit !== undefined && body.unit !== null && body.unit !== '') {
+            const u = String(body.unit).toLowerCase();
+            if (!UNITS[u]) throw httpError(400, `unknown unit: ${u}`);
+            it.unit = u;
+            recompute = true;
+          }
+          if (recompute) it.cost = Math.round(it.quantity * it.unitPrice * 100) / 100;
           if (body.price !== undefined && body.price !== null && body.price !== '') setPrice(store, id, Number(body.price));
           if (body.name !== undefined && String(body.name).trim()) it.name = String(body.name).trim();
           if (body.kind !== undefined) {
