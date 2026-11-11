@@ -95,9 +95,9 @@ bodies are size-limited.
 ## Docker
 
 ```sh
-docker build -t <dockerhub-user>/budget-app:latest .
-docker login                       # once, with a DockerHub access token
-docker push <dockerhub-user>/budget-app:latest
+docker build -t softbrix/budget-app:latest .
+docker login                       # once, with a DockerHub access token (Account Settings → Security → Access Tokens)
+docker push softbrix/budget-app:latest
 ```
 
 Run locally:
@@ -127,18 +127,20 @@ Two workflows:
 - **`ci.yml`** (PRs + pushes to `main`): tests on Node 22/24/26, dependency audit, local docker build + smoke test.
 - **`docker-publish.yml`**:
   - on **pull requests** to `main`: builds the image and pushes a preview tag to GitHub Container Registry: `ghcr.io/<owner>/budget-app:pr-<number>`, then smoke-tests it;
-  - on **pushes to `main`** (i.e. after merge): pushes `ghcr.io/<owner>/budget-app:latest` and `:sha-<sha>`, then deploys to your server over SSH (`docker compose pull && up -d`).
+  - on **pushes to `main`** (i.e. after merge): pushes `ghcr.io/<owner>/budget-app:latest` + `:sha-<sha>` to GHCR **and** `softbrix/budget-app:latest` + `:sha-<sha>` to Docker Hub, then deploys to your server over SSH (`docker compose pull && up -d`, pulling `softbrix/budget-app:latest` from Docker Hub).
 
-The deploy job only runs when the following repo secrets are set (Settings → Secrets and variables → Actions):
+Repo secrets (Settings → Secrets and variables → Actions → New repository secret):
 
 | Secret | Purpose |
 | --- | --- |
+| `DOCKERHUB_USERNAME` | `softbrix` |
+| `DOCKERHUB_TOKEN` | Docker Hub **access token** (hub.docker.com → Account Settings → Security → New Access Token, read/write) — needed for CI to push to Docker Hub and for the server to pull |
 | `DEPLOY_HOST` | hostname/IP of your server |
 | `DEPLOY_USER` | SSH user (e.g. `deploy`) |
 | `DEPLOY_SSH_KEY` | private SSH key with access to that user |
 | `DEPLOY_DIR` | optional, app directory on the server (default `/opt/budget-app`) |
 
-On the server, keep a `docker-compose.yaml` with `image: ${BUDGET_IMAGE:-budget-app:latest}` (as in this repo) and the `budget-data` volume; the workflow exports `BUDGET_IMAGE=ghcr.io/<owner>/budget-app:latest` before `docker compose pull`. GHCR login on the server uses the workflow's `GITHUB_TOKEN`. Until the secrets exist, the deploy job is skipped and CI stays green. To make the GHCR package pullable by your server without auth, set the package visibility to public (or add a PAT on the server).
+On the server, keep a `docker-compose.yaml` with `image: ${BUDGET_IMAGE:-budget-app:latest}` (as in this repo) and the `budget-data` volume; the deploy job exports `BUDGET_IMAGE=softbrix/budget-app:latest` and logs in to Docker Hub with the `DOCKERHUB_*` secrets before `docker compose pull`. Until the secrets exist, the Docker Hub push and the deploy job are skipped and CI stays green. The published image will be visible at [hub.docker.com/r/softbrix/budget-app](https://hub.docker.com/repository/docker/softbrix/budget-app/general).
 
 ## Tests
 
