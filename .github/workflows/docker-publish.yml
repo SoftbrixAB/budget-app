@@ -11,7 +11,6 @@ permissions:
   packages: write
 
 env:
-  GHCR_IMAGE: ghcr.io/${{ github.repository }}
   DH_IMAGE: softbrix/budget-app
 
 jobs:
@@ -87,35 +86,3 @@ jobs:
           done
           docker logs budget-app
           exit 1
-
-  deploy:
-    name: Deploy to hosting server
-    needs: build-push
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check deploy configuration
-        id: check
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-        run: |
-          if [ -z "$DEPLOY_HOST" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "DEPLOY_HOST not set - skipping SSH deploy (images are on GHCR/Docker Hub as :latest)"
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Deploy over SSH
-        if: ${{ steps.check.outputs.configured == 'true' }}
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-            cd ${{ secrets.DEPLOY_DIR || '/opt/budget-app' }}
-            export BUDGET_IMAGE=${{ env.DH_IMAGE }}:latest
-            docker compose pull
-            docker compose up -d
-            docker image prune -f

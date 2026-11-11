@@ -127,20 +127,40 @@ Two workflows:
 - **`ci.yml`** (PRs + pushes to `main`): tests on Node 22/24/26, dependency audit, local docker build + smoke test.
 - **`docker-publish.yml`**:
   - on **pull requests** to `main`: builds the image and pushes a preview tag to GitHub Container Registry: `ghcr.io/<owner>/budget-app:pr-<number>`, then smoke-tests it;
-  - on **pushes to `main`** (i.e. after merge): pushes `ghcr.io/<owner>/budget-app:latest` + `:sha-<sha>` to GHCR **and** `softbrix/budget-app:latest` + `:sha-<sha>` to Docker Hub, then deploys to your server over SSH (`docker compose pull && up -d`, pulling `softbrix/budget-app:latest` from Docker Hub).
+  - on **pushes to `main`** (i.e. after merge): pushes `ghcr.io/<owner>/budget-app:latest` + `:sha-<sha>` to GHCR **and** `softbrix/budget-app:latest` + `:sha-<sha>` to Docker Hub. The published image is visible at [hub.docker.com/r/softbrix/budget-app](https://hub.docker.com/repository/docker/softbrix/budget-app/general).
 
-Repo secrets (Settings → Secrets and variables → Actions → New repository secret):
+Repo secrets (Settings → Secrets and variables → Actions → New repository secret) — only needed for the Docker Hub push on `main`:
 
 | Secret | Purpose |
 | --- | --- |
 | `DOCKERHUB_USERNAME` | `softbrix` |
-| `DOCKERHUB_TOKEN` | Docker Hub **access token** (hub.docker.com → Account Settings → Security → New Access Token, read/write) — needed for CI to push to Docker Hub and for the server to pull |
-| `DEPLOY_HOST` | hostname/IP of your server |
-| `DEPLOY_USER` | SSH user (e.g. `deploy`) |
-| `DEPLOY_SSH_KEY` | private SSH key with access to that user |
-| `DEPLOY_DIR` | optional, app directory on the server (default `/opt/budget-app`) |
+| `DOCKERHUB_TOKEN` | Docker Hub **access token** (hub.docker.com → Account Settings → Security → New Access Token, read/write) |
 
-On the server, keep a `docker-compose.yaml` with `image: ${BUDGET_IMAGE:-budget-app:latest}` (as in this repo) and the `budget-data` volume; the deploy job exports `BUDGET_IMAGE=softbrix/budget-app:latest` and logs in to Docker Hub with the `DOCKERHUB_*` secrets before `docker compose pull`. Until the secrets exist, the Docker Hub push and the deploy job are skipped and CI stays green. The published image will be visible at [hub.docker.com/r/softbrix/budget-app](https://hub.docker.com/repository/docker/softbrix/budget-app/general).
+Until those exist, the Docker Hub push is skipped and CI stays green.
+
+## Running on a server (managed by your ops configuration)
+
+Servers are managed outside this repo (your ops config); `docker-compose.yaml` in this repo is the reference for it. On any server with Docker:
+
+```sh
+docker login -u softbrix            # only if the Docker Hub repo is private
+BUDGET_IMAGE=softbrix/budget-app:latest docker compose up -d --build
+```
+
+or with plain docker:
+
+```sh
+docker run -d --name budget-app \
+  -p 3000:3000 \
+  -e HOST=0.0.0.0 -e PORT=3000 -e DATA_DIR=/data \
+  -v budget-data:/data \
+  softbrix/budget-app:latest
+```
+
+- port `3000` is exposed; put it behind a reverse proxy (Caddy/nginx) with HTTPS
+- state lives in the `budget-data` volume mounted at `/data` (`DATA_DIR`), so it survives container recreation
+- the container has a healthcheck against `/api/health`
+- update to a new release: `BUDGET_IMAGE=softbrix/budget-app:latest docker compose pull && docker compose up -d` (or pin a `:sha-<sha>` tag)
 
 ## Tests
 
