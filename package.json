@@ -10,7 +10,7 @@
     "start": "node src/server.js",
     "web": "node src/server.js",
     "cli": "node budget.js",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=18"
