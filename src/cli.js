@@ -10,6 +10,7 @@ import {
   setChecked,
   removeItem,
   setPrice,
+  setActual,
   clearChecked
 } from './store.js';
 
@@ -47,7 +48,8 @@ const HELP = `budget-app CLI commands:
   list, ls                            show the checklist with per-entry estimates and totals
   check <id> / uncheck <id>           mark an entry as bought / not bought
   toggle <id>                         flip the checked state of an entry
-  price <id> <amount>                 override the estimate with an actual price
+  price <id> <amount>                 override the planned cost (estimate is kept for comparison)
+  actual <id> <amount|clear>          set/clear the actual paid cost (vs the estimate)
   remove <id>, rm <id>                delete an entry
   budget [amount]                     show or set the budget limit (vs total planned spend)
   fallback [amount]                   show or set the fallback estimate for unknown items
@@ -72,7 +74,7 @@ function renderList(store) {
   if (store.items.length === 0) {
     lines.push('No entries yet. Add one with: add 2 kg apples');
   } else {
-    const headers = ['ID', 'DONE', 'KIND', 'ITEM', 'QTY', 'ESTIMATE', 'SOURCE'];
+    const headers = ['ID', 'DONE', 'KIND', 'ITEM', 'QTY', 'ESTIMATE', 'ACTUAL', 'SOURCE'];
     const rows = store.items.map((it) => [
       String(it.id),
       it.checked ? '[x]' : '[ ]',
@@ -80,6 +82,7 @@ function renderList(store) {
       it.name,
       `${it.quantity} ${it.unit}`,
       fmt(it.cost, cur) + (it.kind === 'recurring' ? `/${it.interval}` : ''),
+      it.actualCost !== null && it.actualCost !== undefined ? fmt(it.actualCost, cur) : '—',
       it.source
     ]);
     const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
@@ -98,6 +101,9 @@ function renderList(store) {
     `One-time: ${fmt(s.once, cur)} (checked ${fmt(s.onceChecked, cur)})  ` +
       `Recurring: ${fmt(s.monthly, cur)}/month (checked ${fmt(s.monthlyChecked, cur)})  ` +
       `Total planned: ${fmt(s.total, cur)}`
+  );
+  lines.push(
+    `Estimated: ${fmt(s.estimated, cur)}  Actual: ${fmt(s.actual, cur)}${s.actualCount ? ` (${s.actualCount} ${s.actualCount === 1 ? 'entry' : 'entries'})` : ''}`
   );
   if (store.budget !== null && store.budget !== undefined) {
     const over = s.remaining < 0;
@@ -177,6 +183,22 @@ export function execute(ctx, args) {
       }
       setPrice(ctx.store, id, amount);
       return { changed: true, text: `#${id} "${item.name}" price set to ${fmt(item.cost, cur)} [manual]` };
+    }
+    case 'actual': {
+      const id = parseId(rest[0]);
+      const item = id !== null ? findItem(ctx.store, id) : null;
+      if (!item) return { changed: false, text: 'error: no entry with that id (see: list)' };
+      if (rest[1] === undefined || String(rest[1]).toLowerCase() === 'clear') {
+        setActual(ctx.store, id, null);
+        return { changed: true, text: `#${id} "${item.name}" actual cleared` };
+      }
+      const amount = Number(String(rest[1]).replace(',', '.').replace(/[$€£]/g, ''));
+      if (!Number.isFinite(amount) || amount < 0) return { changed: false, text: 'usage: actual <id> <amount|clear>' };
+      setActual(ctx.store, id, amount);
+      return {
+        changed: true,
+        text: `#${id} "${item.name}" actual ${fmt(amount, cur)} (estimated ${fmt(item.estimatedCost ?? item.cost, cur)})`
+      };
     }
     case 'budget': {
       if (rest.length === 0) {

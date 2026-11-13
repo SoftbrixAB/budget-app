@@ -20,17 +20,20 @@ test('summarize handles empty store', () => {
     total: 0,
     checked: 0,
     unchecked: 0,
-    remaining: null
+    remaining: null,
+    estimated: 0,
+    actual: 0,
+    actualCount: 0
   });
 });
 
-test('summarize counts checked recurring separately', () => {
+test('summarize counts checked recurring separately and tracks estimated vs actual', () => {
   const store = {
     budget: 1000,
     items: [
-      { kind: 'recurring', interval: 'monthly', cost: 300, checked: true },
+      { kind: 'recurring', interval: 'monthly', cost: 300, estimatedCost: 280, actualCost: 310, checked: true },
       { kind: 'recurring', interval: 'yearly', cost: 1200, checked: false },
-      { kind: 'once', interval: null, cost: 50, checked: false }
+      { kind: 'once', interval: null, cost: 50, estimatedCost: 45, checked: false }
     ]
   };
   const s = summarize(store);
@@ -41,4 +44,7 @@ test('summarize counts checked recurring separately', () => {
   assert.equal(s.checked, 300);
   assert.equal(s.unchecked, 150);
   assert.equal(s.remaining, 550);
+  assert.equal(s.estimated, 280 + 100 + 45);
+  assert.equal(s.actual, 310);
+  assert.equal(s.actualCount, 1);
 });

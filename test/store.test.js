@@ -11,6 +11,7 @@ import {
   setChecked,
   removeItem,
   setPrice,
+  setActual,
   clearChecked
 } from '../src/store.js';
 import { summarize } from '../src/model.js';
@@ -64,6 +65,36 @@ test('v1 files are migrated: items without kind become one-time', () => {
   assert.equal(store.items[0].kind, 'once');
   assert.equal(store.items[0].interval, null);
   assert.equal(store.items[0].checked, true);
+  assert.equal(store.items[0].estimatedCost, 1.6);
+  assert.equal(store.items[0].actualCost, null);
+});
+
+test('addItem snapshots the estimate and starts with no actual', () => {
+  const store = defaultStore();
+  const item = addItem(store, parseEntry('2 kg apples'));
+  assert.equal(item.cost, 6.0);
+  assert.equal(item.estimatedCost, 6.0);
+  assert.equal(item.actualCost, null);
+});
+
+test('setPrice changes the planned cost but keeps the estimate', () => {
+  const store = defaultStore();
+  const item = addItem(store, parseEntry('2 kg apples'));
+  setPrice(store, item.id, 4.5);
+  const updated = store.items[0];
+  assert.equal(updated.cost, 9.0);
+  assert.equal(updated.estimatedCost, 6.0);
+  assert.equal(updated.source, 'manual');
+});
+
+test('setActual sets and clears the actual cost', () => {
+  const store = defaultStore();
+  const item = addItem(store, parseEntry('milk'));
+  setActual(store, item.id, 2.25);
+  assert.equal(store.items[0].actualCost, 2.25);
+  setActual(store, item.id, null);
+  assert.equal(store.items[0].actualCost, null);
+  assert.equal(setActual(store, 999, 1), null);
 });
 
 test('addItem applies recurring kind/interval from catalog hint or opts', () => {

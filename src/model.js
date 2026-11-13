@@ -18,11 +18,19 @@ export function monthlyEquivalent(entry) {
   }
 }
 
+function normalizedCost(it, cost) {
+  if (it.kind === 'recurring') return monthlyEquivalent({ kind: it.kind, interval: it.interval, cost });
+  return cost;
+}
+
 export function summarize(store) {
   let once = 0;
   let onceChecked = 0;
   let monthly = 0;
   let monthlyChecked = 0;
+  let estimated = 0;
+  let actual = 0;
+  let actualCount = 0;
   for (const it of store.items) {
     const cost = Number(it.cost) || 0;
     if (it.kind === 'recurring') {
@@ -32,6 +40,11 @@ export function summarize(store) {
     } else {
       once += cost;
       if (it.checked) onceChecked += cost;
+    }
+    estimated += normalizedCost(it, Number(it.estimatedCost ?? it.cost) || 0);
+    if (it.actualCost !== null && it.actualCost !== undefined) {
+      actual += normalizedCost(it, Number(it.actualCost) || 0);
+      actualCount++;
     }
   }
   const total = once + monthly;
@@ -45,6 +58,9 @@ export function summarize(store) {
     total: round2(total),
     checked: round2(checked),
     unchecked: round2(total - checked),
-    remaining: remaining === null ? null : round2(remaining)
+    remaining: remaining === null ? null : round2(remaining),
+    estimated: round2(estimated),
+    actual: round2(actual),
+    actualCount
   };
 }

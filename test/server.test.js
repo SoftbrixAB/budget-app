@@ -202,3 +202,48 @@ test('PATCH edits name/quantity/unit/price/kind and recomputes cost', async (t) 
   r = await j(await patch(id, { quantity: -1 }));
   assert.equal(r.status, 400);
 });
+
+test('PATCH sets/clears actualCost and summary exposes estimated vs actual', async (t) => {
+  const { server, base } = await startServer();
+  t.after(() => server.close());
+  const post = (p, b) =>
+    fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+
+  await post('/api/workspaces', { name: 'w' });
+  const added = await j(await post('/api/entries?workspace=w', { text: '2 kg apples' }));
+  const id = added.body.entry.id;
+  assert.equal(added.body.entry.estimatedCost, 6);
+  assert.equal(added.body.entry.actualCost, null);
+
+  let r = await j(
+    await fetch(`${base}/api/entries/${id}?workspace=w`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actual: 5.5 })
+    })
+  );
+  assert.equal(r.body.entry.actualCost, 5.5);
+  assert.equal(r.body.state.summary.actual, 5.5);
+  assert.equal(r.body.state.summary.estimated, 6);
+  assert.equal(r.body.state.summary.actualCount, 1);
+
+  r = await j(
+    await fetch(`${base}/api/entries/${id}?workspace=w`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actual: null })
+    })
+  );
+  assert.equal(r.body.entry.actualCost, null);
+  assert.equal(r.body.state.summary.actual, 0);
+  assert.equal(r.body.state.summary.actualCount, 0);
+
+  r = await j(
+    await fetch(`${base}/api/entries/${id}?workspace=w`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actual: -3 })
+    })
+  );
+  assert.equal(r.status, 400);
+});

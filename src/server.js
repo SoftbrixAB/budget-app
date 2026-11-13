@@ -191,6 +191,12 @@ export function createServer(opts = {}) {
           }
           if (recompute) it.cost = Math.round(it.quantity * it.unitPrice * 100) / 100;
           if (body.price !== undefined && body.price !== null && body.price !== '') setPrice(store, id, Number(body.price));
+          if (body.actual !== undefined) {
+            it.actualCost = body.actual === null || body.actual === '' ? null : Number(body.actual);
+            if (it.actualCost !== null && (!Number.isFinite(it.actualCost) || it.actualCost < 0)) {
+              throw httpError(400, 'actual must be a non-negative number or null');
+            }
+          }
           if (body.name !== undefined && String(body.name).trim()) it.name = String(body.name).trim();
           if (body.kind !== undefined) {
             it.kind = body.kind === 'recurring' ? 'recurring' : 'once';

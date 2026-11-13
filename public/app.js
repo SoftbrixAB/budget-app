@@ -80,6 +80,8 @@ function render() {
     <div class="stat"><div class="label">One-time</div><div class="value">${money(s.once)}</div></div>
     <div class="stat"><div class="label">Recurring / month</div><div class="value">${money(s.monthly)}</div></div>
     <div class="stat"><div class="label">Total planned</div><div class="value">${money(s.total)}</div></div>
+    <div class="stat"><div class="label">Estimated</div><div class="value">${money(s.estimated)}</div></div>
+    <div class="stat"><div class="label">Actual${s.actualCount ? ` (${s.actualCount})` : ''}</div><div class="value">${money(s.actual)}</div></div>
     <div class="stat ${over ? 'over' : ''}"><div class="label">Checked</div><div class="value">${money(s.checked)}</div></div>
     <div class="budget-line">${d.budget !== null ? `Budget ${money(d.budget)} — ${over ? 'over budget by ' : 'remaining '}${money(Math.abs(s.remaining))}` : 'No budget set (see Settings)'}</div>
   `;
@@ -115,16 +117,22 @@ function renderList(ul, entries) {
       <span class="qty">${esc(e.quantity)} ${esc(e.unit)}</span>
       <span class="cost">${money(e.cost)}${e.kind === 'recurring' ? ' / ' + esc(e.interval) : ''}</span>
       ${e.kind === 'recurring' ? `<span class="badge" title="monthly equivalent">≈ ${money(e.monthly)}/mo</span>` : ''}
+      ${e.actualCost !== null && e.actualCost !== undefined ? `<span class="badge act" title="actual paid (estimate was ${money(e.estimatedCost ?? e.cost)})">actual ${money(e.actualCost)}</span>` : ''}
       <span class="badge src">${esc(e.source)}</span>
       <button type="button" data-act="edit">edit</button>
       <button type="button" data-act="del" class="del">✕</button>
     `;
     li.querySelector('input[type=checkbox]').addEventListener('change', async (ev) => {
+      const body = { checked: ev.target.checked };
+      if (ev.target.checked && (e.actualCost === null || e.actualCost === undefined)) {
+        const p = prompt(`Actual cost paid for "${e.name}" (empty = keep estimate ${money(e.cost)}):`);
+        if (p !== null && p !== '') body.actual = Number(p);
+      }
       try {
         await api(`/api/entries/${e.id}`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ checked: ev.target.checked })
+          body: JSON.stringify(body)
         });
         await refresh();
       } catch (err) {
@@ -156,7 +164,8 @@ function startEdit(li, e) {
     <select class="e-unit" title="unit">
       ${UNIT_OPTIONS.map((u) => `<option value="${u}" ${u === e.unit ? 'selected' : ''}>${u}</option>`).join('')}
     </select>
-    <input class="e-price" type="number" step="0.01" min="0" value="${e.unitPrice}" title="unit price">
+    <input class="e-price" type="number" step="0.01" min="0" value="${e.unitPrice}" title="unit price (planned)">
+    <input class="e-actual" type="number" step="0.01" min="0" value="${e.actualCost ?? ''}" title="actual paid (empty = none)" placeholder="actual">
     <select class="e-kind" title="cost type">
       <option value="once" ${e.kind === 'once' ? 'selected' : ''}>one-time</option>
       <option value="recurring" ${e.kind === 'recurring' ? 'selected' : ''}>recurring</option>
@@ -173,11 +182,13 @@ function startEdit(li, e) {
   });
   li.querySelector('.cancel').addEventListener('click', () => refresh());
   li.querySelector('.save').addEventListener('click', async () => {
+    const actualVal = li.querySelector('.e-actual').value;
     const body = {
       name: li.querySelector('.e-name').value,
       quantity: Number(li.querySelector('.e-qty').value),
       unit: li.querySelector('.e-unit').value,
       price: Number(li.querySelector('.e-price').value),
+      actual: actualVal === '' ? null : Number(actualVal),
       kind: kindSel.value
     };
     if (kindSel.value === 'recurring') body.interval = li.querySelector('.e-interval').value;

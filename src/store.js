@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export function defaultStore() {
   return {
-    version: 2,
+    version: 3,
     currency: 'USD',
     budget: null,
     fallbackEstimate: 5,
@@ -22,6 +22,8 @@ export function loadStore(file) {
       if (!it.kind) it.kind = 'once';
       if (it.interval === undefined) it.interval = null;
       if (it.checked === undefined) it.checked = false;
+      if (it.estimatedCost === undefined) it.estimatedCost = typeof it.cost === 'number' ? it.cost : null;
+      if (it.actualCost === undefined) it.actualCost = null;
     }
     if (typeof store.nextId !== 'number') store.nextId = store.items.length + 1;
     return store;
@@ -45,7 +47,9 @@ export function addItem(store, parsed, opts = {}) {
     checked: false,
     kind,
     interval,
-    ...fields
+    actualCost: null,
+    ...fields,
+    estimatedCost: fields.cost
   };
   store.items.push(item);
   return item;
@@ -74,6 +78,13 @@ export function setPrice(store, id, amount) {
   item.source = 'manual';
   item.unitPrice = Math.round(amount * 100) / 100;
   item.cost = Math.round(item.quantity * item.unitPrice * 100) / 100;
+  return item;
+}
+
+export function setActual(store, id, amount) {
+  const item = findItem(store, id);
+  if (!item) return null;
+  item.actualCost = amount === null ? null : Math.round(amount * 100) / 100;
   return item;
 }
 

@@ -34,7 +34,7 @@ node budget.js --file my.json --currency SEK list
 ```
 
 CLI commands: `add [--once|--monthly|--quarterly|--yearly|--weekly] <item> [qty] [unit] [@ price]`,
-`list`, `check` / `uncheck` / `toggle <id>`, `price <id> <amount>`, `remove <id>`,
+`list`, `check` / `uncheck` / `toggle <id>`, `price <id> <amount>`, `actual <id> <amount|clear>`, `remove <id>`,
 `budget [amount]`, `fallback [amount]`, `clear`, `help`.
 Without arguments it starts an interactive session.
 
@@ -52,7 +52,17 @@ Without arguments it starts an interactive session.
 3. **Fallback** — unknown items get a configurable flat estimate (`fallback`, default 5)
    → `source: fallback`.
 
-Any estimate can be overridden per entry → `source: manual`.
+Any planned cost can be overridden per entry → `source: manual` (the original estimate is kept as `estimatedCost`).
+
+## Estimated vs actual
+
+Every entry keeps two figures:
+
+- `estimatedCost` — the automatic estimate at creation time (immutable snapshot)
+- `cost` — the current planned cost (estimate or `price` override)
+- `actualCost` — what was actually paid, set when you check an item off (the web UI asks; empty = not recorded) or via `actual <id> <amount|clear>` in the CLI / the row editor / `PATCH {actual}` in the API
+
+Summaries (web UI cards, CLI `list`, `summary` in `/api/state`) show **Estimated**, **Actual** (normalized like the planned totals) and **Total planned**, so you can compare what the estimator predicted against what you really paid. Store schema v3; v1/v2 files migrate automatically.
 
 ## Recurring vs one-time
 
@@ -91,6 +101,11 @@ bodies are size-limited.
 - Next steps for production: authentication + per-workspace membership, HTTPS termination
   in front of the app (never expose it directly), rate limiting, and billing (e.g. Stripe)
   keyed on workspace.
+
+### Planned next (tracked as issues)
+
+- [#2](https://github.com/SoftbrixAB/budget-app/issues/2) — multi-item parsing on add (e.g. `PS5 + handkontroll` → per-part estimates)
+- [#3](https://github.com/SoftbrixAB/budget-app/issues/3) — 12-month cash-flow projection view (API + UI chart + CLI `project`)
 
 ## Docker
 

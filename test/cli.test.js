@@ -34,7 +34,7 @@ test('end-to-end: add, list, check, price, budget, remove, clear', () => {
   let out = cli(file, 'list');
   assert.match(out, /apples/);
   assert.match(out, /\[ \]/);
-  assert.match(out, /dragon scales\s+4 each\s+\$20\.00\s+fallback/);
+  assert.match(out, /dragon scales\s+4 each\s+\$20\.00/);
   assert.match(out, /Total planned: \$27\.60/);
   assert.match(out, /Recurring: \$0\.00\/month/);
 
@@ -43,6 +43,15 @@ test('end-to-end: add, list, check, price, budget, remove, clear', () => {
   out = cli(file, 'list');
   assert.match(out, /\[x\]\s+once\s+apples/);
   assert.match(out, /One-time: \$27\.60 \(checked \$6\.00\)/);
+  assert.match(out, /Estimated: \$27\.60\s+Actual: \$0\.00/);
+
+  out = cli(file, 'actual', '1', '5.50');
+  assert.match(out, /#1 "apples" actual \$5\.50 \(estimated \$6\.00\)/);
+  out = cli(file, 'list');
+  assert.match(out, /apples\s+2 kg\s+\$6\.00\s+\$5\.50/);
+  assert.match(out, /Actual: \$5\.50 \(1 entry\)/);
+  out = cli(file, 'actual', '1', 'clear');
+  assert.match(out, /#1 "apples" actual cleared/);
 
   out = cli(file, 'price', '2', '2.00');
   assert.match(out, /#2 "milk" price set to \$2\.00 \[manual\]/);
