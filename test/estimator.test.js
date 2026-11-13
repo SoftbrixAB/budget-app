@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseEntry } from '../src/estimator.js';
+import { parseEntry, parseEntryLine } from '../src/estimator.js';
 
 test('parses quantity and unit from the front: "2 kg apples"', () => {
   const e = parseEntry('2 kg apples');
@@ -153,4 +153,36 @@ test('fallback estimate is not converted (already in workspace currency)', () =>
   const e = parseEntry('mystery item', 500, { currency: 'SEK' });
   assert.equal(e.source, 'fallback');
   assert.equal(e.cost, 500);
+});
+
+test('parseEntryLine splits multi-item lines into one parsed entry per part', () => {
+  const plus = parseEntryLine('PS5 + handkontroll');
+  assert.equal(plus.length, 2);
+  assert.deepEqual(plus.map((p) => p.name), ['PS5', 'handkontroll']);
+  assert.deepEqual(plus.map((p) => p.cost), [500, 70]);
+  assert.deepEqual(plus.map((p) => p.source), ['catalog', 'catalog']);
+
+  const comma = parseEntryLine('2 kg apples, 500 g chicken');
+  assert.equal(comma.length, 2);
+  assert.deepEqual(comma.map((p) => p.cost), [6, 4]);
+
+  const och = parseEntryLine('Kontorsstol och Pennor');
+  assert.equal(och.length, 2);
+  assert.deepEqual(och.map((p) => p.cost), [250, 8]);
+
+  const single = parseEntryLine('milk');
+  assert.equal(single.length, 1);
+  assert.equal(single[0].cost, 1.6);
+});
+
+test('parseEntryLine does not split decimal commas in prices', () => {
+  const parts = parseEntryLine('milk @ 2,50');
+  assert.equal(parts.length, 1);
+  assert.equal(parts[0].source, 'given');
+  assert.equal(parts[0].cost, 2.5);
+});
+
+test('parseEntryLine throws on empty input', () => {
+  assert.throws(() => parseEntryLine('   '), /empty/);
+  assert.throws(() => parseEntryLine(' + '), /empty/);
 });

@@ -21,6 +21,15 @@ function matchCatalog(name) {
   return best;
 }
 
+export function parseEntryLine(text, fallbackEstimate = 5, opts = {}) {
+  const parts = String(text)
+    .split(/\+|\&|\s+och\s+|,(?!\d)/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) throw new Error('entry name is empty');
+  return parts.map((p) => parseEntry(p, fallbackEstimate, opts));
+}
+
 export function parseEntry(text, fallbackEstimate = 5, opts = {}) {
   const rate = FX_RATES[opts.currency] ?? 1;
   let rest = String(text).trim();
