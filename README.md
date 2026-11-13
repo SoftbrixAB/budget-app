@@ -52,6 +52,11 @@ Without arguments it starts an interactive session.
 3. **Fallback** — unknown items get a configurable flat estimate (`fallback`, default 5)
    → `source: fallback`.
 
+**Multi-item lines**: add-lines are split on `+`, `&`, `och` and `,` (a comma between digits is
+treated as a decimal separator, so `@ 2,50` still works) into one entry per part, each
+estimated independently — e.g. `PS5 + handkontroll` adds two entries ($500 + $70), and the
+CLI/API/toast report every part.
+
 Any planned cost can be overridden per entry → `source: manual` (the original estimate is kept as `estimatedCost`).
 
 ## Estimated vs actual

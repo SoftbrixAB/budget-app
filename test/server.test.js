@@ -247,3 +247,30 @@ test('PATCH sets/clears actualCost and summary exposes estimated vs actual', asy
   );
   assert.equal(r.status, 400);
 });
+
+test('POST /api/entries splits multi-item lines into separate entries', async (t) => {
+  const { server, base } = await startServer();
+  t.after(() => server.close());
+  const post = (p, b) =>
+    fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+
+  await post('/api/workspaces', { name: 'w' });
+  let r = await j(await post('/api/entries?workspace=w', { text: 'PS5 + handkontroll' }));
+  assert.equal(r.status, 201);
+  assert.equal(r.body.entries.length, 2);
+  assert.deepEqual(r.body.entries.map((e) => [e.name, e.cost, e.source]), [
+    ['PS5', 500, 'catalog'],
+    ['handkontroll', 70, 'catalog']
+  ]);
+  assert.equal(r.body.entry.name, 'PS5');
+  assert.equal(r.body.state.summary.once, 570);
+
+  r = await j(await post('/api/entries?workspace=w', { text: 'milk @ 2,50' }));
+  assert.equal(r.body.entries.length, 1);
+  assert.equal(r.body.entries[0].cost, 2.5);
+
+  r = await j(await post('/api/entries?workspace=w', { text: 'Hyra, Internet', kind: 'recurring', interval: 'monthly' }));
+  assert.equal(r.body.entries.length, 2);
+  assert.deepEqual(r.body.entries.map((e) => e.kind), ['recurring', 'recurring']);
+  assert.equal(r.body.state.summary.monthly, 1250);
+});
