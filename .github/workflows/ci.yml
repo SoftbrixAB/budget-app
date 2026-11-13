@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: Vulnerability audit (fails on moderate+)
+        run: npm audit --audit-level=moderate
+      - name: Outdated packages (informational)
+        run: npm outdated || true
+      - name: Dependency tree
+        run: npm ls --all
+
+  docker:
+    name: Docker build + smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t budget-app:ci .
+      - name: Run container and check health endpoint
+        run: |
+          docker run -d --name budget-app -p 3000:3000 -e DATA_DIR=/tmp/data budget-app:ci
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs budget-app
+          exit 1
+      - name: Exercise the API inside the container
+        run: |
+          curl -fsS -X POST http://127.0.0.1:3000/api/workspaces -H 'content-type: application/json' -d '{"name":"ci"}'
+          curl -fsS -X POST "http://127.0.0.1:3000/api/entries?workspace=ci" -H 'content-type: application/json' -d '{"text":"Kontorsstol"}'
+          curl -fsS "http://127.0.0.1:3000/api/state?workspace=ci"

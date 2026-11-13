@@ -1,0 +1,19 @@
+{
+  "name": "budget-app",
+  "version": "1.0.0",
+  "description": "Budget web app + CLI with a checklist, automatic per-entry cost estimates, and recurring vs one-time costs",
+  "type": "module",
+  "bin": {
+    "budget": "budget.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "web": "node src/server.js",
+    "cli": "node budget.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

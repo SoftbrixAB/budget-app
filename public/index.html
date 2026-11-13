@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>budget-app</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>budget-app</h1>
+  <nav>
+    <a href="#/" data-view="checklist">Checklist</a>
+    <a href="#/settings" data-view="settings">Settings</a>
+  </nav>
+  <div class="ws">
+    <label>Workspace
+      <select id="workspace"></select>
+    </label>
+    <button id="new-ws" type="button">+ new</button>
+  </div>
+</header>
+<main>
+  <section id="view-checklist">
+    <section class="card" id="summary-card">
+      <h2>Summary</h2>
+      <div id="summary" class="summary"></div>
+    </section>
+
+    <section class="card">
+      <h2>Add entry</h2>
+      <form id="add-form" class="row">
+        <input id="add-text" type="text" required placeholder='e.g. "2 kg apples", "Kontorsstol", "Hyra", "PS5 + handkontroll @ 6000"'>
+        <select id="add-kind">
+          <option value="">cost type: auto</option>
+          <option value="once">one-time</option>
+          <option value="monthly">recurring · monthly</option>
+          <option value="quarterly">recurring · quarterly</option>
+          <option value="yearly">recurring · yearly</option>
+          <option value="weekly">recurring · weekly</option>
+        </select>
+        <input id="add-price" type="number" step="0.01" min="0" placeholder="price override (optional)">
+        <button type="submit">Add</button>
+      </form>
+      <p class="hint">The cost is estimated automatically from the text — catalog match, explicit <code>@ price</code>, or the fallback estimate.</p>
+    </section>
+
+    <section class="card">
+      <h2>Recurring costs</h2>
+      <ul id="list-recurring" class="entries"></ul>
+    </section>
+
+    <section class="card">
+      <h2>One-time purchases</h2>
+      <ul id="list-once" class="entries"></ul>
+    </section>
+  </section>
+
+  <section id="view-settings" hidden>
+    <section class="card">
+      <h2>Settings</h2>
+      <form id="settings-form" class="row">
+        <label>Currency
+          <select id="currency">
+            <option>USD</option><option>EUR</option><option>GBP</option><option>SEK</option>
+          </select>
+        </label>
+        <label>Budget
+          <input id="budget" type="number" step="0.01" min="0" placeholder="not set">
+        </label>
+        <label>Fallback estimate
+          <input id="fallback" type="number" step="0.01" min="0">
+        </label>
+        <button type="submit">Save</button>
+      </form>
+      <p class="hint">Set the currency before adding entries — catalog prices are converted from USD at estimate time.</p>
+    </section>
+  </section>
+</main>
+<div id="toasts"></div>
+<script src="/app.js" defer></script>
+</body>
+</html>

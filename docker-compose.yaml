@@ -1,0 +1,24 @@
+services:
+  budget-app:
+    build: .
+    image: ${BUDGET_IMAGE:-budget-app:latest}
+    container_name: budget-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DATA_DIR: /data
+      NODE_ENV: production
+    volumes:
+      - budget-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  budget-data:
