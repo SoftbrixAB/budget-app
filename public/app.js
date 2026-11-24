@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   ws: localStorage.getItem('budget.ws') || 'default',
   data: null,
-  lastAddedId: null
+  lastAddedIds: []
 };
 
 async function api(path, opts = {}) {
@@ -89,14 +89,14 @@ function render() {
   renderList($('list-recurring'), d.entries.filter((e) => e.kind === 'recurring'));
   renderList($('list-once'), d.entries.filter((e) => e.kind !== 'recurring'));
 
-  if (state.lastAddedId !== null) {
-    const li = document.querySelector(`li[data-id="${state.lastAddedId}"]`);
+  for (const id of state.lastAddedIds) {
+    const li = document.querySelector(`li[data-id="${id}"]`);
     if (li) {
       li.classList.add('flash');
       li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
-    state.lastAddedId = null;
   }
+  state.lastAddedIds = [];
 }
 
 function renderList(ul, entries) {
@@ -222,9 +222,12 @@ $('add-form').addEventListener('submit', async (ev) => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body)
     });
-    const e = r.entry;
-    state.lastAddedId = e.id;
-    toast(`added #${e.id} "${e.name}" — estimated ${money(e.cost)}${e.kind === 'recurring' ? '/' + e.interval : ''} [${e.source}]`);
+    const added = r.entries || [r.entry];
+    state.lastAddedIds = added.map((e) => e.id);
+    const desc = added
+      .map((e) => `#${e.id} "${e.name}" ${money(e.cost)}${e.kind === 'recurring' ? '/' + e.interval : ''} [${e.source}]`)
+      .join('\n');
+    toast(added.length === 1 ? `added ${desc}` : `added ${added.length} entries:\n${desc}`);
     $('add-text').value = '';
     $('add-price').value = '';
     await refresh();

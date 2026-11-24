@@ -126,3 +126,17 @@ test('check with a bad id reports an error', () => {
   const out = cli(file, 'check', '42');
   assert.match(out, /error: no entry with that id/);
 });
+
+test('add splits multi-item lines into separate entries with per-part estimates', () => {
+  const file = makeFile();
+  let out = cli(file, 'add', 'PS5 + handkontroll');
+  assert.match(out, /#1 "PS5".*\$500\.00 \[catalog\]/);
+  assert.match(out, /#2 "handkontroll".*\$70\.00 \[catalog\]/);
+  out = cli(file, 'add', '2 kg apples, 500 g chicken');
+  assert.match(out, /#3 "apples".*\$6\.00/);
+  assert.match(out, /#4 "chicken".*\$4\.00/);
+  out = cli(file, 'add', 'milk @ 2,50');
+  assert.match(out, /#5 "milk".*\$2\.50 \[given\]/);
+  out = cli(file, 'list');
+  assert.match(out, /Total planned: \$582\.50/);
+});

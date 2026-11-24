@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseEntry } from './estimator.js';
+import { parseEntryLine } from './estimator.js';
 import { UNITS } from './catalog.js';
 import { monthlyEquivalent, summarize } from './model.js';
 import {
@@ -157,14 +157,18 @@ export function createServer(opts = {}) {
       if (url.pathname === '/api/entries' && req.method === 'POST') {
         const body = await readBody(req);
         const store = loadStore(wsFile(ws));
-        const parsed = parseEntry(String(body.text || ''), store.fallbackEstimate, { currency: store.currency });
+        const parsedList = parseEntryLine(String(body.text || ''), store.fallbackEstimate, { currency: store.currency });
         const kind = body.kind === 'recurring' ? 'recurring' : body.kind === 'once' ? 'once' : undefined;
-        const item = mutate(ws, (s) => addItem(s, parsed, { kind, interval: body.interval }));
+        const items = mutate(ws, (s) => parsedList.map((p) => addItem(s, p, { kind, interval: body.interval })));
         if (body.price !== undefined && body.price !== null && body.price !== '') {
-          mutate(ws, (s) => setPrice(s, item.id, Number(body.price)));
+          for (const it of items) mutate(ws, (s) => setPrice(s, it.id, Number(body.price)));
         }
-        const saved = findItem(loadStore(wsFile(ws)), item.id);
-        send(201, { entry: { ...saved, monthly: monthlyEquivalent(saved) }, state: state(ws) });
+        const after = loadStore(wsFile(ws));
+        const entries = items.map((it) => {
+          const saved = findItem(after, it.id);
+          return { ...saved, monthly: monthlyEquivalent(saved) };
+        });
+        send(201, { entries, entry: entries[0], state: state(ws) });
         return;
       }
 

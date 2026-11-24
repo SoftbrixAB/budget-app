@@ -1,6 +1,6 @@
 import path from 'node:path';
 import readline from 'node:readline';
-import { parseEntry } from './estimator.js';
+import { parseEntryLine } from './estimator.js';
 import { summarize } from './model.js';
 import {
   loadStore,
@@ -141,18 +141,18 @@ export function execute(ctx, args) {
         }
       }
       if (!textParts.length) return { changed: false, text: 'usage: add [--once|--monthly|--quarterly|--yearly|--weekly] <item> [qty] [unit] [@ price]' };
-      let parsed;
+      let parsedList;
       try {
-        parsed = parseEntry(textParts.join(' '), ctx.store.fallbackEstimate, { currency: ctx.store.currency });
+        parsedList = parseEntryLine(textParts.join(' '), ctx.store.fallbackEstimate, { currency: ctx.store.currency });
       } catch (err) {
         return { changed: false, text: `error: ${err.message}` };
       }
-      const item = addItem(ctx.store, parsed, { kind, interval });
-      const per = item.kind === 'recurring' ? `/${item.interval}` : '';
-      return {
-        changed: true,
-        text: `added #${item.id} "${item.name}" (${item.quantity} ${item.unit}) — estimated ${fmt(item.cost, cur)}${per} [${item.source}] (${kindLabel(item)})`
-      };
+      const items = parsedList.map((p) => addItem(ctx.store, p, { kind, interval }));
+      const lines = items.map((item) => {
+        const per = item.kind === 'recurring' ? `/${item.interval}` : '';
+        return `added #${item.id} "${item.name}" (${item.quantity} ${item.unit}) — estimated ${fmt(item.cost, cur)}${per} [${item.source}] (${kindLabel(item)})`;
+      });
+      return { changed: true, text: lines.join('\n') };
     }
     case 'list':
     case 'ls':
